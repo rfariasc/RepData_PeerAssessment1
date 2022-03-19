@@ -5,21 +5,151 @@ output:
     keep_md: true
 ---
 
+```{r, echo = TRUE}
+# Importing required libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+```
+
+
+
 
 ## Loading and preprocessing the data
+```{r, echo = TRUE}
+activity = read.csv(unz("activity.zip", "activity.csv"), stringsAsFactors = FALSE, na.strings = "NA")
 
+```
 
 
 ## What is mean total number of steps taken per day?
+```{r, echo = TRUE}
 
+# Calculate the steps by date
+steps_per_day = activity %>%
+  group_by(date) %>%
+  summarise(total_steps=sum(steps, na.rm=TRUE))
+
+```
+
+
+```{r, echo = TRUE}
+# Generate histogram of the daily steps
+ggplot(data=steps_per_day, aes(x=total_steps)) + geom_histogram() + labs(x='Total steps', y='Count')
+
+```
+
+
+```{r, echo = TRUE}
+# Summarizing mean and median
+steps_per_day %>% 
+  summarise(
+    daily_steps_mean=mean(total_steps),
+    daily_steps_median=median(total_steps)
+  )
+
+```
 
 
 ## What is the average daily activity pattern?
+```{r, echo = TRUE}
+interval_mean = activity %>%
+  group_by(interval) %>%
+  summarize(mean_steps=mean(steps, na.rm=TRUE))
 
+
+# Viewing the intervall mean over days
+ggplot(data=interval_mean, aes(x=interval, y=mean_steps)) + geom_line() + labs(x='Interval', y='Mean steps')
+
+```
+```{r, echo = TRUE}
+
+# Finding the interval with the greatest mean
+interval_mean %>% 
+  arrange(desc(mean_steps)) %>%
+  slice(1)
+
+```
+
+The 835 interval was the interval were the steps were the maximum in this dataset.
 
 
 ## Imputing missing values
 
+```{r, echo = TRUE}
+
+# Counting na by column
+sapply(activity, function(y) sum(length(which(is.na(y)))))
+
+```
+
+```{r, echo = TRUE}
+
+
+
+
+new_activity = merge(activity, interval_mean, by='interval', all.x=TRUE)
+
+# Fill na with mean steps in interval
+new_activity$steps[is.na(new_activity$steps)] = new_activity$mean_steps
+
+new_activity = new_activity %>%
+  arrange(date, interval) %>%
+  select(date, interval, steps)
+
+sapply(new_activity, function(y) sum(length(which(is.na(y)))))
+
+```
+
+```{r, echo = TRUE}
+
+# Calculate the steps by date
+new_steps_per_day = new_activity %>%
+  group_by(date) %>%
+  summarise(total_steps=sum(steps))
+
+
+# Generate histogram of the daily steps
+ggplot(data=new_steps_per_day, aes(x=total_steps)) + geom_histogram() + labs(x='Total steps', y='Count')
+
+```
+
+
+```{r, echo = TRUE}
+# Summarizing mean and median
+new_steps_per_day %>% 
+  summarise(
+    daily_steps_mean=mean(total_steps),
+    daily_steps_median=median(total_steps)
+  )
+
+```
+
+For the mean the difference is low and for the median there is no change. Maybe it could be that the missing values were clustered where the steps count were low.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+
+```{r, echo = TRUE}
+
+# Adding weekday as factor
+new_activity= new_activity %>%
+  mutate(date=as.Date(date)) %>%
+  mutate(weekday=ifelse(weekdays(date) %in% c("Saturday", "Sunday"), "weekend", "weekday"), weekdays(date)) %>%
+  mutate(weekday=as.factor(weekday))
+
+# Generating aggregated data by weekday
+steps_by_interval_weekday = new_activity %>%
+  group_by(interval, weekday) %>%
+  summarise(avg_steps=mean(steps, na.rm=TRUE))
+
+# Plotting aggregated data
+ggplot(data=steps_by_interval_weekday, aes(x=interval, y=avg_steps)) + labs(x='Interval', y='Number of steps') + geom_line() + facet_grid(rows=vars(weekday))
+
+```
+
+
+It looks that on the weekend the steps were more evenly distributed during the day, and on weekdays it peaks between 750-1000 and the remain in more lower values.
